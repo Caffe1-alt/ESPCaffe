@@ -2,9 +2,9 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local localPlayer = Players.LocalPlayer
 
-local dodgeDistance = 5
-local dodgeSpeed = 25
-local detectionRadius = 15
+local dodgeDistance = 7
+local detectionRadius = 20
+local dodgeSpeed = 20
 
 local function calculateDodgePosition(character, projectile)
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
@@ -22,10 +22,14 @@ local function isProjectileDangerous(projectile, character)
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return false end
 
+    local distance = (projectile.Position - humanoidRootPart.Position).Magnitude
+    if distance > detectionRadius then return false end
+
     local directionToCharacter = (humanoidRootPart.Position - projectile.Position).Unit
     local projectileVelocity = projectile.Velocity.Unit
 
-    return directionToCharacter:Dot(projectileVelocity) > 0.9
+    local movingTowardPlayer = directionToCharacter:Dot(projectileVelocity) > 0.9
+    return movingTowardPlayer
 end
 
 local function dodgeProjectiles()
@@ -37,21 +41,30 @@ local function dodgeProjectiles()
 
     for _, object in ipairs(workspace:GetDescendants()) do
         if object:IsA("BasePart") and object.Velocity.Magnitude > 50 then
-            if (object.Position - humanoidRootPart.Position).Magnitude <= detectionRadius then
-                if isProjectileDangerous(object, character) then
-                    local dodgePosition = calculateDodgePosition(character, object)
-                    humanoid:MoveTo(dodgePosition)
-                    break
-                end
+            if isProjectileDangerous(object, character) then
+                local dodgePosition = calculateDodgePosition(character, object)
+                humanoid:MoveTo(dodgePosition)
+                task.wait(0.1)
+                break
             end
         end
     end
 end
 
-task.delay(5, function()
-    RunService.Stepped:Connect(function()
-        local success, err = pcall(function()
+local function monitorHealthChanges()
+    local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+
+    humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+        if humanoid.Health < humanoid.MaxHealth then
             dodgeProjectiles()
-        end)
+        end
+    end)
+end
+
+task.delay(5, function()
+    monitorHealthChanges()
+    RunService.Stepped:Connect(function()
+        dodgeProjectiles()
     end)
 end)
